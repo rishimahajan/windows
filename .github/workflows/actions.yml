@@ -53,29 +53,29 @@ jobs:
       - name: Check ImageMagick version
         run: magick -version
         
-# - name: "DOWNLOAD:EXECUTE:QA:TESTS"
+      - name: "DOWNLOAD:EXECUTE:QA:TESTS"
         # shell: bash
-        # run: |
+        run: |
           # export PATH=/home/runner/miniconda3/bin:$PATH
           # echo "**********Download & Execute Tests**********"
           # cd scripts/
           # bash ./download_tests.sh ${TESTRUNID} ${OS} ${ENVIRONMENT} ${TENANT} ${PROJECT_TOKEN} download
           # cd ../
-           pabot --pabotlib --pabotlibport 0 --testlevelsplit --processes 7 -d results -L trace --variable tenant:"%TENANT%" --variable url:%TENANT_URL% --variable environment:%ENVIRONMENT% --variable test_run_id:%TEST_RUN_ID% --variable project_id:%PROJECT_ID% --variable execution_mode:nonDebug --variable headless:%HEADLESS% tenants/ || exit 0
-      # - name: "RE:RUN:FAILED:TESTS"
+            pabot --pabotlib --pabotlibport 0 --testlevelsplit --processes 7 -d results -L trace --variable tenant:"%TENANT%" --variable url:%TENANT_URL% --variable environment:%ENVIRONMENT% --variable test_run_id:%TEST_RUN_ID% --variable project_id:%PROJECT_ID% --variable execution_mode:nonDebug --variable headless:%HEADLESS% tenants/ || exit 0
+      - name: "RE:RUN:FAILED:TESTS"
         # shell: bash
-        # run: |
+        run: |
           # export PATH=/home/runner/miniconda3/bin:$PATH
           # echo "**********RE-Run Failed Tests**********"
-          pabot --pabotlib --pabotlibport 0 --testlevelsplit --processes 7 -d results -L trace --rerunfailed results/output.xml -o rerun.xml --variable tenant:"%TENANT%" --variable url:%TENANT_URL% --variable environment:%ENVIRONMENT% --variable test_run_id:%TEST_RUN_ID% --variable project_id:%PROJECT_ID% --variable execution_mode:nonDebug --variable headless:%HEADLESS% tenants/ || exit 0
+            pabot --pabotlib --pabotlibport 0 --testlevelsplit --processes 7 -d results -L trace --rerunfailed results/output.xml -o rerun.xml --variable tenant:"%TENANT%" --variable url:%TENANT_URL% --variable environment:%ENVIRONMENT% --variable test_run_id:%TEST_RUN_ID% --variable project_id:%PROJECT_ID% --variable execution_mode:nonDebug --variable headless:%HEADLESS% tenants/ || exit 0
 
-      # - name: "COMBINE:RESULTS"
+      - name: "COMBINE:RESULTS"
         # shell: bash
-        # run: |
+        run: |
           # export PATH=/home/runner/miniconda3/bin:$PATH
           # echo "**********Combine Results**********"
           # cp results/log.html results/log1.html
-          rebot -d results -o output.xml --merge results/output.xml  results/rerun.xml || exit 0
+            rebot -d results -o output.xml --merge results/output.xml  results/rerun.xml || exit 0
 
 
 # - name: "PUSH:RESULTS"
