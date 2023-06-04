@@ -1,0 +1,251 @@
+# - name: "DOWNLOAD:EXECUTE:QA:TESTS"
+        # shell: bash
+        # run: |
+          # export PATH=/home/runner/miniconda3/bin:$PATH
+          # echo "**********Download & Execute Tests**********"
+          # cd scripts/
+          # bash ./download_tests.sh ${TESTRUNID} ${OS} ${ENVIRONMENT} ${TENANT} ${PROJECT_TOKEN} download
+          # cd ../
+           pabot --pabotlib --pabotlibport 0 --testlevelsplit --processes 7 -d results -L trace --variable tenant:"%TENANT%" --variable url:%TENANT_URL% --variable environment:%ENVIRONMENT% --variable test_run_id:%TEST_RUN_ID% --variable project_id:%PROJECT_ID% --variable execution_mode:nonDebug --variable headless:%HEADLESS% tenants/ || exit 0
+      # - name: "RE:RUN:FAILED:TESTS"
+        # shell: bash
+        # run: |
+          # export PATH=/home/runner/miniconda3/bin:$PATH
+          # echo "**********RE-Run Failed Tests**********"
+          pabot --pabotlib --pabotlibport 0 --testlevelsplit --processes 7 -d results -L trace --rerunfailed results/output.xml -o rerun.xml --variable tenant:"%TENANT%" --variable url:%TENANT_URL% --variable environment:%ENVIRONMENT% --variable test_run_id:%TEST_RUN_ID% --variable project_id:%PROJECT_ID% --variable execution_mode:nonDebug --variable headless:%HEADLESS% tenants/ || exit 0
+
+      # - name: "COMBINE:RESULTS"
+        # shell: bash
+        # run: |
+          # export PATH=/home/runner/miniconda3/bin:$PATH
+          # echo "**********Combine Results**********"
+          # cp results/log.html results/log1.html
+          rebot -d results -o output.xml --merge results/output.xml  results/rerun.xml || exit 0
+
+
+# - name: "PUSH:RESULTS"
+        # shell: bash
+        # run: |
+          # cd scripts/
+          # echo "**********Push Results Started**********"
+          # export PATH=/home/runner/miniconda3/bin:$PATH
+          # bash ./download_tests.sh ${TESTRUNID} ${OS} ${ENVIRONMENT} ${TENANT} ${PROJECT_TOKEN} push
+
+      # - name: "DOWNLOAD:ALLURE:COMMAND:LINE"
+        # shell: bash
+        # run: |
+          # curl -o allure-2.13.8.tgz -OLs https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/2.13.8/allure-commandline-2.13.8.tgz
+          # sudo tar -zxvf allure-2.13.8.tgz -C /opt/
+          # sudo ln -s /opt/allure-2.13.8/bin/allure /usr/bin/allure || echo "exists"
+          # allure --version
+          # allure generate --clean -o allure-results
+          # cp -r results reports
+          # chmod -R 777 ./
+
+      # - name: "AWS:EKS:PULL:KUBECONFIG"
+        # uses: tillster/github-actions/aws_pull_eks_kube_config@v1
+        # with:
+          # cluster_name: "tillster-shared-eks"
+          # aws_region: "us-east-1"
+          # location: "/home/runner/.kube/config"
+
+      # - name: "VAULT:SECRET:RETRIEVAL:MULTIPATH"
+        # uses: tillster/github-actions/utility_vault_secrets_to_masked_env@v1
+        # with:
+          # vault_paths: "kv-v2/dev/us/defaults/terraform"
+          # vault_pod: "vault-1"
+          # vault_namespace: "vault"
+          # kubeconfig_location: "/home/runner/.kube/config"
+          # vault_token: "${{ secrets.TILLSTER_VAULT_TOKEN }}"
+          # debug: "false"
+
+      # - name: "AWS:ASSUME:SESSION"
+        # uses: tillster/github-actions/aws_assume_role@v1
+        # with:
+          # aws_role: "${{ env.TF_VAR_deployment_role }}"
+
+      # - name: "AWS:S3:COPY:HISTORY"
+        # shell: bash
+        # run: |
+          # pwd
+          # ls -lah
+          # mkdir -p allure-report/
+          # cd allure-report/
+          # pwd
+          # ls -lah
+          # mkdir -p allure-history/
+          # sudo chmod -R 777 /home/runner/work/ui-test-automation
+          # aws s3 cp --recursive s3://${{env.ALLURE_REPORTS_BUCKET}}/${{env.TENANT}}/allure-report/ ./
+          # pwd
+          # ls -lah ./
+          # ls -lah allure-history/
+
+      # - name: "GENERATE:ALLURE:REPORT"
+        # shell: bash
+        # env:
+          # INPUT_KEEP_REPORTS: 20
+          # INPUT_ALLURE_RESULTS: "output/allure"
+          # INPUT_GITHUB_RUN_NUM: "${{ github.run_number }}"
+          # INPUT_GITHUB_RUN_ID: "${{ env.GITHUB_RUN_ID }}"
+          # INPUT_GITHUB_REPO: "ui-test-automation"
+          # INPUT_ALLURE_REPORT: "allure-report"
+          # INPUT_ALLURE_HISTORY: "allure-history"
+        # run: |
+          # #! /usr/bin/env bash
+          # mkdir -p ./${INPUT_ALLURE_HISTORY}
+          # COUNT=$( ( ls ./${INPUT_ALLURE_HISTORY} | wc -l ) )
+          # echo "count folders in ${INPUT_ALLURE_HISTORY}: ${COUNT}"
+          # echo "keep reports count ${INPUT_KEEP_REPORTS}"
+          # INPUT_KEEP_REPORTS=$((INPUT_KEEP_REPORTS+1))
+          # echo "if ${COUNT} > ${INPUT_KEEP_REPORTS}"
+
+          # if (( COUNT > INPUT_KEEP_REPORTS )); then
+            # cd ./${INPUT_ALLURE_HISTORY}
+            # echo "remove old reports"
+            # ls | sort -n | head -n -$((${INPUT_KEEP_REPORTS}-2)) | xargs rm -rv;
+            # cd ${GITHUB_WORKSPACE}
+          # fi
+
+          # echo '{"name":"GitHub Actions","type":"github","reportName":"Allure Report with history",' > executor.json
+          # echo "\"url\":\"${GITHUB_PAGES_WEBSITE_URL}\"," >> executor.json # ???
+          # echo "\"reportUrl\":\"${GITHUB_PAGES_WEBSITE_URL}/${INPUT_GITHUB_RUN_NUM}/\"," >> executor.json
+          # echo "\"buildUrl\":\"https://github.com/${INPUT_GITHUB_REPO}/actions/runs/${INPUT_GITHUB_RUN_ID}\"," >> executor.json
+          # echo "\"buildName\":\"GitHub Actions Run #${INPUT_GITHUB_RUN_ID}\",\"buildOrder\":\"${INPUT_GITHUB_RUN_NUM}\"}" >> executor.json
+          # mv ./executor.json ./${INPUT_ALLURE_RESULTS}
+
+          # echo "keep allure history from ./history to ${INPUT_ALLURE_RESULTS}/history"
+          # pwd
+          # cd allure-report/
+          # pwd
+          # ls -lah
+          # cp -r ./history/ ../${INPUT_ALLURE_RESULTS}/history
+          # cd ../
+          # pwd
+
+          # echo "generating report from ${INPUT_ALLURE_RESULTS} to ${INPUT_ALLURE_REPORT} ..."
+          # allure generate --clean ${INPUT_ALLURE_RESULTS} -o ${INPUT_ALLURE_REPORT}
+
+          # echo "copy allure-report to ${INPUT_ALLURE_HISTORY}/${INPUT_GITHUB_RUN_NUM}"
+          # cp -r ./${INPUT_ALLURE_REPORT}/. ./${INPUT_ALLURE_HISTORY}/${INPUT_GITHUB_RUN_NUM}
+
+          # echo "copy allure-report history to /${INPUT_ALLURE_HISTORY}/last-history"
+          # cp -r ./${INPUT_ALLURE_REPORT}/history/. ./${INPUT_ALLURE_HISTORY}/last-history
+
+      # #- name: "GENERATE:ALLURE:REPORT"
+      # #  uses: simple-elf/allure-report-action@master
+      # #  if: always()
+      # #  id: allure-report
+      # #  with:
+      # #    allure_results: output/allure
+      # #    gh_pages: gh-pages
+      # #    allure_report: allure-report
+      # #    allure_history: allure-history
+      # #    keep_reports: 20
+
+      # - name: "AWS:S3:COPY:HISTORY"
+        # shell: bash
+        # run: |
+          # get_allure_history_directories=`find ./allure-history -maxdepth 1 -type d -regextype posix-extended -regex '.*\/[0-9]+$'`
+          # echo ${get_allure_history_directories}
+          # get_latest_history_directory=`echo ${get_allure_history_directories} | sort -nr | head -n 1 | cut -d '/' -f 3`
+          # echo "Latest Allure Dir: ${get_latest_history_directory}"
+          # sudo rm -rf allure-history/index.html
+          # sudo chmod -R 777 allure-history/
+          # echo "
+          # <!DOCTYPE html><meta charset=\"utf-8\"><meta http-equiv=\"refresh\" content=\"0; URL=https://reports-linux.qa.tillster.com/hb-us-mobile/allure-report/allure-history/${get_latest_history_directory}/\">
+          # <meta http-equiv=\"Pragma\" content=\"no-cache\"><meta http-equiv=\"Expires\" content=\"0\">
+          # " > allure-history/index.html
+          # cat allure-history/index.html
+
+      # - name: "AWS:COPY:FILE:TO:S3"
+        # uses: tillster/github-actions/aws_copy_files_to_s3@v1
+        # with:
+          # path_to_dir_or_file: "./allure-report/"
+          # s3_bucket: "${{env.ALLURE_REPORTS_BUCKET}}"
+          # s3_bucket_path: "${{env.TENANT}}/allure-report/"
+          # assume_role: "${{ env.TF_VAR_deployment_role }}"
+
+      # - name: "AWS:COPY:FILE:TO:S3"
+        # uses: tillster/github-actions/aws_copy_files_to_s3@v1
+        # with:
+          # path_to_dir_or_file: "./allure-history/"
+          # s3_bucket: "${{env.ALLURE_REPORTS_BUCKET}}"
+          # s3_bucket_path: "${{env.TENANT}}/allure-report/allure-history/"
+          # assume_role: "${{ env.TF_VAR_deployment_role }}"
+
+      # - name: "RENAME:ROBOT:REPORTS"
+        # shell: bash
+        # run: |
+          # mv results/report.html results/index.html
+          # ls -lah results/
+
+      # - name: "AWS:COPY:FILE:TO:S3"
+        # uses: tillster/github-actions/aws_copy_files_to_s3@v1
+        # with:
+          # path_to_dir_or_file: "./results/"
+          # s3_bucket: "${{env.ALLURE_REPORTS_BUCKET}}"
+          # s3_bucket_path: "${{env.TENANT}}/robot-reports/"
+          # assume_role: "${{ env.TF_VAR_deployment_role }}"
+
+      # - name: "GET:CLOUD:FRONT:DISTRIBUTION:DOMAIN"
+        # shell: bash
+        # run: |
+          # cloud_front_domain=$(aws cloudfront get-distribution --id ${{ env.CLOUD_FRONT_DISTRIBUTION_ID }} --query 'Distribution.DomainName' --output text)
+          # echo "Cloud Front Domain: ${cloud_front_domain}"
+          # echo "Cloud Allure Tenant Domain: ${cloud_front_domain}/${TENANT}/allure-reports/"
+          # echo "Cloud Robot Tenant Domain: ${cloud_front_domain}/${TENANT}/robot-reports/"
+          # echo "cloud_front_domain=${cloud_front_domain}" >> ${GITHUB_ENV}
+
+      # - name: "AWS:CLOUDFRONT:INVALIDATE:CACHE"
+        # uses: tillster/github-actions/aws_cloudfront_invalidate_cache@v1
+        # with:
+          # distribution_id: "${{ env.CLOUD_FRONT_DISTRIBUTION_ID }}"
+          # path: "/"
+          # assume_role: "${{ env.TF_VAR_deployment_role }}"
+
+      # - name: "AWS:CLOUDFRONT:INVALIDATE:CACHE"
+        # uses: tillster/github-actions/aws_cloudfront_invalidate_cache@v1
+        # with:
+          # distribution_id: "${{ env.CLOUD_FRONT_DISTRIBUTION_ID }}"
+          # path: "/*"
+          # assume_role: "${{ env.TF_VAR_deployment_role }}"
+
+      # - name: "VAULT:SECRET:RETRIEVAL:MULTIPATH"
+        # uses: tillster/github-actions/utility_vault_secrets_to_masked_env@v1
+        # with:
+          # vault_paths: "kv-v2/qa-legacy/us/security/defaults/route-53,kv-v2/prod/us/defaults/terraform"
+          # vault_pod: "vault-1"
+          # vault_namespace: "vault"
+          # kubeconfig_location: "/home/runner/.kube/config"
+          # vault_token: "${{ secrets.TILLSTER_VAULT_TOKEN }}"
+          # debug: "false"
+
+      # - name: "AWS:ASSUME:SESSION"
+        # uses: tillster/github-actions/aws_assume_role@v1
+        # with:
+          # aws_role: "${{ env.TF_VAR_deployment_role }}"
+
+      # #move to infrastructure pipeline
+      # - name: "AWS:TERRAFORM:DEPLOY:CLOUDFLARE_DNS_PROXY"
+        # uses: tillster/github-actions/terraform_deploy_cloudflare_dns_proxy@v1
+        # with:
+          # aws_region: "us-east-1"
+          # platform_tag: "tillster"
+          # service_tag: "qa-ui-reports"
+          # environment_tag: "qa"
+          # purpose_tag: "reporting"
+          # app_name_tag: "qa-reports-linux-cloudflare"
+          # deployment_role: "${{ env.TF_VAR_deployment_role }}"
+          # terraform_state_bucket: "${{ env.tf_state_bucket_name }}"
+          # terraform_dynamo_db_table: "${{ env.tf_state_lock_table }}"
+          # terraform_action: "apply"
+          # debug: "true"
+          # cloudflare_endpoint: "${{ env.cloud_front_domain }}"
+          # domain_prefix: "reports-linux"
+          # dns_deployment_platform: "tillster"
+
+      # - name: "Clean-up"
+        # if: ${{ always() }}
+        # shell: bash
+        # run: |
+          # sudo rm -rf home/runner/work/ui-test-automation/ui-test-automation
