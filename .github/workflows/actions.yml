@@ -1,4 +1,4 @@
-name: Windows Pipeline
+name: Windows Pipeline on self hosted runner
 
 on:
   push:
