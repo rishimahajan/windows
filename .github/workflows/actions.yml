@@ -4,10 +4,20 @@ on:
   push:
     branches:
       - master
+  workflow_dispatch:
+    inputs:
+      TENANT_URL:
+        description: "TENANT_URL"
+        required: true
+        type: choice
+        options:
+          - https:///www-bp-ca-b.qa.tillster.com/
 
 jobs:
   build:
-    runs-on: self-hosted
+    runs-on: windows-latest
+    env:
+      TENANT_URL: "${{ github.event.inputs.TENANT_URL }}"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -54,17 +64,16 @@ jobs:
         run: magick -version
         
       - name: "DOWNLOAD:EXECUTE:QA:TESTS"
-        # shell: bash
+        shell: bash
         run: |
-            pabot --pabotlib --pabotlibport 0 --testlevelsplit --processes 7 -d results -L trace --variable tenant:"%TENANT%" --variable url:%TENANT_URL% --variable environment:%ENVIRONMENT% --variable test_run_id:%TEST_RUN_ID% --variable project_id:%PROJECT_ID% --variable execution_mode:nonDebug --variable headless:%HEADLESS% tenants/
-      - name: "RE:RUN:FAILED:TESTS"
-        run: |
-            pabot --pabotlib --pabotlibport 0 --testlevelsplit --processes 7 -d results -L trace --rerunfailed results/output.xml -o rerun.xml --variable tenant:"%TENANT%" --variable url:%TENANT_URL% --variable environment:%ENVIRONMENT% --variable test_run_id:%TEST_RUN_ID% --variable project_id:%PROJECT_ID% --variable execution_mode:nonDebug --variable headless:%HEADLESS% tenants/
+            pabot --pabotlib --pabotlibport 0 --testlevelsplit --processes 7 -d results -L trace --variable url:${{ env.TENANT_URL }} tenants/
 
-      - name: "COMBINE:RESULTS"
-        # shell: bash
-        run: |
-            rebot -d results -o output.xml --merge results/output.xml  results/rerun.xml
+#       - name: "RE:RUN:FAILED:TESTS"
+        
+#       - name: "COMBINE:RESULTS"
+#         shell: bash
+#         run: |
+#             rebot -d results -o output.xml --merge results/output.xml  results/rerun.xml
 
 
 # - name: "PUSH:RESULTS"
