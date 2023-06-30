@@ -11,13 +11,14 @@ on:
         required: true
         type: choice
         options:
-          - https:///www-bp-ca-b.qa.tillster.com/
+          - https://www-bp-ca-b.qa.tillster.com/
 
 jobs:
   build:
     runs-on: windows-latest
     env:
-      TENANT_URL: "${{ github.event.inputs.TENANT_URL }}"
+#      TENANT_URL: "${{ github.event.inputs.TENANT_URL }}"
+      TENANT_URL: "https://www-bp-ca-b.qa.tillster.com/"
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
