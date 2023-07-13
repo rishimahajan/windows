@@ -2,7 +2,7 @@ name: "WINDOWS:QA:WEB:TESTS"
 on:
   push:
     branches:
-      - main
+      - master
   workflow_dispatch:
     inputs:
       TEST_RUN_ID:
