@@ -1,24 +1,79 @@
-name: Windows Pipeline
-
+name: "WINDOWS:QA:WEB:TESTS"
 on:
   push:
     branches:
-      - master
+      - main
   workflow_dispatch:
     inputs:
+      TEST_RUN_ID:
+        description: "Unique-Test-Name"
+        required: true
+        default: "800363"
       TENANT_URL:
         description: "TENANT_URL"
         required: true
         type: choice
         options:
-          - https://www-bp-ca-b.qa.tillster.com/
+          - "https://www-bp-ca-b.qa.tillster.com/"
+      TENANT:
+        description: "Tenant to run tests for."
+        required: true
+        default: "bp_ca_web"
+      ENVIRONMENT:
+        description: "Tenant to run tests for"
+        required: true
+        default: "qa_b"
+      SLACK_CHANNEL:
+        description: "SLACK_CHANNEL"
+        required: true
+        type: choice
+        options:
+          - cucumberstudio-automation-execution-notifications
+      PROJECT_ID:
+        description: "PROJECT_ID"
+        required: true
+        type: choice
+        options:
+          - 382793
+      HEADLESS:
+        description: ""
+        required: false
+        default: "false"
+      EXECUTION_LINE:
+        description: "PROJECT_ID"
+        required: true
+        type: choice
+        options:
+          - PRODUCTION
+          - FEATURE
+      PROJECT_TOKEN:
+        description: ""
+        required: true
+        default: "306207310794220617737335551566131797332866977968674583572"
 
 jobs:
-  build:
+  run_tests:
+    name: run_tests
     runs-on: windows-latest
     env:
-#      TENANT_URL: "${{ github.event.inputs.TENANT_URL }}"
+      BRANCH: "origin/master"
+      ALLURE_REPORTS_BUCKET: "windows-allure-reports.www"
+      CLOUD_FRONT_DISTRIBUTION_ID: "E23PLE2509AG07"
+      TEST_RUN_ID: "800363"
       TENANT_URL: "https://www-bp-ca-b.qa.tillster.com/"
+      TENANT: "${{ github.event.inputs.TENANT }}"
+      ENVIRONMENT: "${{ github.event.inputs.ENVIRONMENT }}"
+      SLACK_CHANNEL: "${{ github.event.inputs.SLACK_CHANNEL }}"
+      PROJECT_ID: "${{ github.event.inputs.PROJECT_ID }}"
+      HEADLESS: "${{ github.event.inputs.HEADLESS }}"
+      EXECUTION_LINE: "${{ github.event.inputs.EXECUTION_LINE }}"
+      PROJECT_TOKEN: "306207310794220617737335551566131797332866977968674583572"
+      # PROJECT_TOKEN: "${{ github.event.inputs.PROJECT_TOKEN }}"
+
+    strategy:
+      matrix:
+        os: [ 'tillster-self-hosted-e' ]
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -47,7 +102,7 @@ jobs:
       - name: Install Ruby
         uses: ruby/setup-ruby@v1
         with:
-          ruby-version: '2.7.4'
+          ruby-version: '3.0.1'
 
       - name: Install hiptest-publisher gem
         run: gem install hiptest-publisher
@@ -63,95 +118,85 @@ jobs:
 
       - name: Check ImageMagick version
         run: magick -version
-        
+
       - name: "DOWNLOAD:EXECUTE:QA:TESTS"
+        shell: pwsh
+        run: |
+            hiptest-publisher -c hiptest-publisher.conf --token=${{ env.PROJECT_TOKEN }} --filename-pattern=%%s.robot --test-run-id ${{ env.TEST_RUN_ID }} --without=actionwords -v
+
+            robot -d results -t "reset the test results before the test run" --variable test_run_id:${{ env.TEST_RUN_ID }} --variable project_id:${{ env.PROJECT_ID }} resources/common/resetTestResults.robot
+
+            pabot --pabotlib --pabotlibport 0 --testlevelsplit --processes 7 -d results -L trace --variable tenant:${{ env.TENANT }} --variable url:${{ env.TENANT_URL }} --variable environment:${{ env.ENVIRONMENT }} --variable test_run_id:${{ env.TEST_RUN_ID }} --variable project_id:${{ env.PROJECT_ID }} --variable execution_mode:nonDebug --variable headless:${{ env.HEADLESS }} tenants/
+
+            echo rerun1 for failed tests started
+            pabot --pabotlib --pabotlibport 0 --testlevelsplit --processes 7 -d results -L trace --rerunfailed results/output.xml -o rerun.xml --variable tenant:${{ env.TENANT }} --variable url:${{ env.TENANT_URL }} --variable environment:${{ env.ENVIRONMENT }} --variable test_run_id:${{ env.TEST_RUN_ID }} --variable project_id:${{ env.PROJECT_ID }} --variable execution_mode:nonDebug --variable headless:${{ env.HEADLESS }} tenants/
+
+            echo combine results 1
+            rebot -d results -o output.xml --merge results/output.xml results/rerun.xml
+
+            echo rerun2 for failed tests started
+            # mkdir results
+            pabot --pabotlib --pabotlibport 0 --testlevelsplit --processes 7 -d results -L trace --rerunfailed results/rerun.xml -o rerun1.xml --variable tenant:${{ env.TENANT }} --variable url:${{ env.TENANT_URL }} --variable environment:${{ env.ENVIRONMENT }} --variable test_run_id:${{ env.TEST_RUN_ID }} --variable project_id:${{ env.PROJECT_ID }} --variable execution_mode:nonDebug --variable headless:${{ env.HEADLESS }} tenants/
+
+            echo combine results 2
+            rebot -d results -o output.xml --merge results/output.xml  results/rerun1.xml
+
+
+      - name: "AWS:EKS:PULL:KUBECONFIG"
+        uses: tillster/github-actions/aws_pull_eks_kube_config@v1
+        with:
+          cluster_name: "tillster-shared-eks"
+          aws_region: "us-east-1"
+          location: "/home/runner/.kube/config"
+
+      - name: "VAULT:SECRET:RETRIEVAL:MULTIPATH"
+        uses: tillster/github-actions/utility_vault_secrets_to_masked_env@v1
+        with:
+          vault_paths: "kv-v2/dev/us/defaults/terraform"
+          vault_pod: "vault-1"
+          vault_namespace: "vault"
+          kubeconfig_location: "/home/runner/.kube/config"
+          vault_token: "${{ secrets.TILLSTER_VAULT_TOKEN }}"
+          debug: "false"
+
+      - name: "AWS:ASSUME:SESSION"
+        uses: tillster/github-actions/aws_assume_role@v1
+        with:
+          aws_role: "${{ env.TF_VAR_deployment_role }}"
+
+      - name: "AWS:S3:COPY:HISTORY"
         shell: bash
         run: |
-            pabot --pabotlib --pabotlibport 0 --testlevelsplit --processes 7 -d results -L trace --variable url:${{ env.TENANT_URL }} tenants/
+          Get-Location
+          Get-ChildItem -Force
+          if(!(Test-Path -Path allure-report)) { New-Item -ItemType Directory -Force -Path allure-report }
+          Set-Location allure-report/
+          Get-ChildItem -Force
+          if(!(Test-Path -Path allure-history)) { New-Item -ItemType Directory -Force -Path allure-history/ }
+          Set-Acl -Path /home/runner/work/ui-test-automation -AclObject (Get-Acl -Path /home/runner/work/ui-test-automation).SetAccessRuleProtection($false, $false)
+          Read-S3Object -BucketName ${{ env.ALLURE_REPORTS_BUCKET }} -KeyPrefix "${{ env.TENANT }}/allure-report/" -Folder "./"
+          Get-Location
+          Get-ChildItem -Force ./
+          Get-ChildItem -Force allure-history/
 
-#       - name: "RE:RUN:FAILED:TESTS"
-        
-#       - name: "COMBINE:RESULTS"
-#         shell: bash
-#         run: |
-#             rebot -d results -o output.xml --merge results/output.xml  results/rerun.xml
-
-
-# - name: "PUSH:RESULTS"
-        # shell: bash
-        # run: |
-          # cd scripts/
-          # echo "**********Push Results Started**********"
-          # export PATH=/home/runner/miniconda3/bin:$PATH
-          # bash ./download_tests.sh ${TESTRUNID} ${OS} ${ENVIRONMENT} ${TENANT} ${PROJECT_TOKEN} push
-
-      # - name: "DOWNLOAD:ALLURE:COMMAND:LINE"
-        # shell: bash
-        # run: |
-          # curl -o allure-2.13.8.tgz -OLs https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/2.13.8/allure-commandline-2.13.8.tgz
-          # sudo tar -zxvf allure-2.13.8.tgz -C /opt/
-          # sudo ln -s /opt/allure-2.13.8/bin/allure /usr/bin/allure || echo "exists"
-          # allure --version
-          # allure generate --clean -o allure-results
-          # cp -r results reports
-          # chmod -R 777 ./
-
-      # - name: "AWS:EKS:PULL:KUBECONFIG"
-        # uses: tillster/github-actions/aws_pull_eks_kube_config@v1
-        # with:
-          # cluster_name: "tillster-shared-eks"
-          # aws_region: "us-east-1"
-          # location: "/home/runner/.kube/config"
-
-      # - name: "VAULT:SECRET:RETRIEVAL:MULTIPATH"
-        # uses: tillster/github-actions/utility_vault_secrets_to_masked_env@v1
-        # with:
-          # vault_paths: "kv-v2/dev/us/defaults/terraform"
-          # vault_pod: "vault-1"
-          # vault_namespace: "vault"
-          # kubeconfig_location: "/home/runner/.kube/config"
-          # vault_token: "${{ secrets.TILLSTER_VAULT_TOKEN }}"
-          # debug: "false"
-
-      # - name: "AWS:ASSUME:SESSION"
-        # uses: tillster/github-actions/aws_assume_role@v1
-        # with:
-          # aws_role: "${{ env.TF_VAR_deployment_role }}"
-
-      # - name: "AWS:S3:COPY:HISTORY"
-        # shell: bash
-        # run: |
-          # pwd
-          # ls -lah
-          # mkdir -p allure-report/
-          # cd allure-report/
-          # pwd
-          # ls -lah
-          # mkdir -p allure-history/
-          # sudo chmod -R 777 /home/runner/work/ui-test-automation
-          # aws s3 cp --recursive s3://${{env.ALLURE_REPORTS_BUCKET}}/${{env.TENANT}}/allure-report/ ./
-          # pwd
-          # ls -lah ./
-          # ls -lah allure-history/
-
-      # - name: "GENERATE:ALLURE:REPORT"
-        # shell: bash
-        # env:
-          # INPUT_KEEP_REPORTS: 20
-          # INPUT_ALLURE_RESULTS: "output/allure"
-          # INPUT_GITHUB_RUN_NUM: "${{ github.run_number }}"
-          # INPUT_GITHUB_RUN_ID: "${{ env.GITHUB_RUN_ID }}"
-          # INPUT_GITHUB_REPO: "ui-test-automation"
-          # INPUT_ALLURE_REPORT: "allure-report"
-          # INPUT_ALLURE_HISTORY: "allure-history"
-        # run: |
-          # #! /usr/bin/env bash
-          # mkdir -p ./${INPUT_ALLURE_HISTORY}
-          # COUNT=$( ( ls ./${INPUT_ALLURE_HISTORY} | wc -l ) )
-          # echo "count folders in ${INPUT_ALLURE_HISTORY}: ${COUNT}"
-          # echo "keep reports count ${INPUT_KEEP_REPORTS}"
-          # INPUT_KEEP_REPORTS=$((INPUT_KEEP_REPORTS+1))
-          # echo "if ${COUNT} > ${INPUT_KEEP_REPORTS}"
+       # - name: "GENERATE:ALLURE:REPORT"
+         # shell: bash
+         # env:
+           # INPUT_KEEP_REPORTS: 20
+           # INPUT_ALLURE_RESULTS: "output/allure"
+           # INPUT_GITHUB_RUN_NUM: "${{ github.run_number }}"
+           # INPUT_GITHUB_RUN_ID: "${{ env.GITHUB_RUN_ID }}"
+           # INPUT_GITHUB_REPO: "ui-test-automation"
+           # INPUT_ALLURE_REPORT: "allure-report"
+           # INPUT_ALLURE_HISTORY: "allure-history"
+         # run: |
+           # ! /usr/bin/env bash
+           # mkdir -p ./${INPUT_ALLURE_HISTORY}
+           # COUNT=$( ( ls ./${INPUT_ALLURE_HISTORY} | wc -l ) )
+           # echo "count folders in ${INPUT_ALLURE_HISTORY}: ${COUNT}"
+           # echo "keep reports count ${INPUT_KEEP_REPORTS}"
+           # INPUT_KEEP_REPORTS=$((INPUT_KEEP_REPORTS+1))
+           # echo "if ${COUNT} > ${INPUT_KEEP_REPORTS}"
 
           # if (( COUNT > INPUT_KEEP_REPORTS )); then
             # cd ./${INPUT_ALLURE_HISTORY}
@@ -184,17 +229,17 @@ jobs:
 
           # echo "copy allure-report history to /${INPUT_ALLURE_HISTORY}/last-history"
           # cp -r ./${INPUT_ALLURE_REPORT}/history/. ./${INPUT_ALLURE_HISTORY}/last-history
-
-      # #- name: "GENERATE:ALLURE:REPORT"
-      # #  uses: simple-elf/allure-report-action@master
-      # #  if: always()
-      # #  id: allure-report
-      # #  with:
-      # #    allure_results: output/allure
-      # #    gh_pages: gh-pages
-      # #    allure_report: allure-report
-      # #    allure_history: allure-history
-      # #    keep_reports: 20
+          
+      # - name: "GENERATE:ALLURE:REPORT"
+       # uses: simple-elf/allure-report-action@master
+       # if: always()
+       # id: allure-report
+       # with:
+         # allure_results: output/allure
+         # gh_pages: gh-pages
+         # allure_report: allure-report
+         # allure_history: allure-history
+         # keep_reports: 20
 
       # - name: "AWS:S3:COPY:HISTORY"
         # shell: bash
